@@ -1,0 +1,22 @@
+"""
+GUI共通定数
+"""
+# ダイアログやリスト等のサイズ定数
+DIALOG_SIZE = (400, 350)
+DETAIL_AREA_MIN_WIDTH = 600
+DETAIL_AREA_MAX_WIDTH = 2000
+SCREEN_LIST_MIN_WIDTH = 180
+SCREEN_LIST_MAX_WIDTH = 250
+SCREEN_LIST_FIXED_WIDTH = 220
+SCROLL_LEFT_FIXED_WIDTH = 230
+LIST_WIDGET_MIN_WIDTH = 350
+LIST_WIDGET_MAX_WIDTH = 350
+LIST_WIDGET_MIN_HEIGHT = 200
+
+# CSVサンプル
+CSV_SAMPLE = (
+    "プロジェクトA,画面1,テストケース1\n"
+    "プロジェクトA,画面1,テストケース2\n"
+    "プロジェクトA,画面2,テストケース1\n"
+    "プロジェクトB,画面X,テストケースA\n"
+)
