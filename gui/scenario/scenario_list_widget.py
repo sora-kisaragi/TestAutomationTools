@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core import scenario_db
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView, QPushButton, QHBoxLayout, QLineEdit, QLabel, QComboBox
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor
 
 class ScenarioListWidget(QWidget):
     """
@@ -14,6 +15,8 @@ class ScenarioListWidget(QWidget):
     """
     def __init__(self, parent=None):
         super().__init__(parent)
+        # データベースの初期化を確実に行う
+        scenario_db.init_db()
         self._init_ui()
         self._load_projects()
         
@@ -31,7 +34,9 @@ class ScenarioListWidget(QWidget):
         self.project_combo.setPlaceholderText("プロジェクト名を検索または選択")
         self.project_combo.setMinimumWidth(200)
         self.project_combo.setMaxVisibleItems(15)
-        self.project_combo.lineEdit().editingFinished.connect(self._on_project_search)
+        line_edit = self.project_combo.lineEdit()
+        if line_edit:
+            line_edit.editingFinished.connect(self._on_project_search)
         self.project_combo.currentIndexChanged.connect(self._on_project_selected)
         self.current_project = QLabel("現在: -")
         proj_layout.addWidget(self.project_label)
@@ -67,16 +72,38 @@ class ScenarioListWidget(QWidget):
         search_layout.addWidget(self.search_button)
         layout.addLayout(search_layout)
 
-        # テーブル
+        # テーブルを作成してから初期化
         self.table = QTableWidget()
+        layout.addWidget(self.table)
+        
+        # テーブルの初期化を確実に行う
+        self._init_table()
+        
+        # 初期状態ではデータを読み込まない（showEventで読み込む）
+    
+    def _init_table(self):
+        """テーブルの初期化"""
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
-            "No", "シナリオ名", "ステータス", "最終実行日", "実行結果", "プロジェクト", "操作"
+            "シナリオ名", "画面名", "ステータス", "最終実行日", "実行結果", "プロジェクト", "操作"
         ])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        header = self.table.horizontalHeader()
+        if header:
+            header.setSectionResizeMode(QHeaderView.Stretch)
+            # 水平ヘッダー（列ヘッダー）を表示
+            header.setVisible(True)
         self.table.setSelectionBehavior(self.table.SelectRows)
         self.table.setEditTriggers(self.table.NoEditTriggers)
-        layout.addWidget(self.table)
+        # 垂直ヘッダー（行番号）のみ非表示
+        vheader = self.table.verticalHeader()
+        if vheader:
+            vheader.setVisible(False)
+        # 初期状態では行を0に設定し、内容をクリア
+        self.table.setRowCount(0)
+        self.table.clearContents()
+        # ヘッダーの表示を確実にする
+        self.table.setShowGrid(True)
+        self.table.setAlternatingRowColors(True)
     
     def _on_search(self):
         """検索ボタン押下時の処理"""
@@ -107,7 +134,7 @@ class ScenarioListWidget(QWidget):
 
     def _on_project_selected(self, idx: int):
         """プロジェクト選択時の処理"""
-        if hasattr(self, '_project_list') and 0 <= idx < len(self._project_list):
+        if hasattr(self, '_project_list') and idx is not None and 0 <= idx < len(self._project_list):
             pid, name = self._project_list[idx]
             self.current_project.setText(f"現在: {name}")
             self._load_scenarios(project_id=pid)
@@ -144,62 +171,82 @@ class ScenarioListWidget(QWidget):
             self.current_project.setText("現在: - (該当なし)")
             self._load_scenarios()
 
-    def _load_scenarios(self, keyword: str = "", project_id: int = None):
+    def _load_scenarios(self, keyword: str = "", project_id: int | None = None):
         """シナリオ一覧を取得してテーブルに表示（キーワード・プロジェクト対応）"""
         import sqlite3
+        # データ読み込み前にテーブルをクリア
+        self.table.clearContents()
+        self.table.setRowCount(0)
         scenarios = []
         try:
             with sqlite3.connect(scenario_db.DB_PATH) as conn:
                 cur = conn.cursor()
+                # テストケーステーブルからシナリオ情報を取得
                 if project_id:
                     cur.execute("""
-                        SELECT id, scenario_name, status, last_run, result, project_id
-                        FROM scenarios WHERE project_id=?
-                        ORDER BY id
+                        SELECT tc.id, tc.name, s.name as screen_name, tc.status, tc.last_run, tc.result, s.project_id
+                        FROM test_cases tc
+                        JOIN screens s ON tc.screen_id = s.id
+                        WHERE s.project_id = ?
+                        ORDER BY tc.id
                     """, (project_id,))
                 else:
                     cur.execute("""
-                        SELECT id, scenario_name, status, last_run, result, project_id
-                        FROM scenarios ORDER BY id
+                        SELECT tc.id, tc.name, s.name as screen_name, tc.status, tc.last_run, tc.result, s.project_id
+                        FROM test_cases tc
+                        JOIN screens s ON tc.screen_id = s.id
+                        ORDER BY tc.id
                     """)
                 for row in cur.fetchall():
                     scenarios.append({
                         'id': row[0],
                         'scenario_name': row[1],
-                        'status': row[2],
-                        'last_run': row[3],
-                        'result': row[4],
-                        'project': self._get_project_name(row[5])
+                        'screen_name': row[2],
+                        'status': row[3] or '未実行',
+                        'last_run': row[4] or '-',
+                        'result': row[5] or '-',
+                        'project': self._get_project_name(row[6])
                     })
         except Exception as e:
             print(f"DBエラー: {e}")
+            print(f"詳細: {str(e)}")
         if keyword:
             keyword_lower = keyword.lower()
             scenarios = [s for s in scenarios if
                 keyword_lower in str(s['scenario_name']).lower() or
                 keyword_lower in str(s['project']).lower()
             ]
+        # データがない場合は空のテーブルを表示
+        if not scenarios:
+            self.table.setRowCount(0)
+            return
+            
+        # 既存のセルウィジェットをクリア
+        self.table.clearContents()
         self.table.setRowCount(len(scenarios))
+        
         for row, scenario in enumerate(scenarios):
-            self.table.setItem(row, 0, QTableWidgetItem(str(row+1)))
-            self.table.setItem(row, 1, QTableWidgetItem(scenario['scenario_name']))
+            # データ行のみにアイテムを設定
+            self.table.setItem(row, 0, QTableWidgetItem(scenario['scenario_name']))
+            self.table.setItem(row, 1, QTableWidgetItem(scenario.get('screen_name', '-')))
             # ステータス色分け
             status_item = QTableWidgetItem(scenario.get('status', '-'))
             if scenario.get('status') == '合格':
-                status_item.setForeground(Qt.green)
+                status_item.setForeground(QColor('green'))
             elif scenario.get('status') == '不合格':
-                status_item.setForeground(Qt.red)
+                status_item.setForeground(QColor('red'))
             self.table.setItem(row, 2, status_item)
             self.table.setItem(row, 3, QTableWidgetItem(scenario.get('last_run', '-')))
             # 実行結果色分け
             result_item = QTableWidgetItem(scenario.get('result', '-'))
             if scenario.get('result') == '合格':
-                result_item.setForeground(Qt.green)
+                result_item.setForeground(QColor('green'))
             elif scenario.get('result') == '不合格':
-                result_item.setForeground(Qt.red)
+                result_item.setForeground(QColor('red'))
             self.table.setItem(row, 4, result_item)
             self.table.setItem(row, 5, QTableWidgetItem(scenario.get('project', '-')))
-            # 操作ボタン
+            
+            # 操作ボタン（データ行のみ、最後のカラムに配置）
             op_widget = QWidget()
             op_layout = QHBoxLayout(op_widget)
             btn_detail = QPushButton("詳細")
@@ -210,7 +257,9 @@ class ScenarioListWidget(QWidget):
             op_layout.addWidget(btn_exec)
             op_layout.setContentsMargins(0,0,0,0)
             op_layout.addStretch()
+            # 確実に最後のカラム（6番目）に配置
             self.table.setCellWidget(row, 6, op_widget)
+            print(f"ボタンを配置: 行={row}, カラム=6")
 
     def _get_project_name(self, project_id):
         if not hasattr(self, '_project_list'):
@@ -227,10 +276,17 @@ class ScenarioListWidget(QWidget):
         """
         from gui.common.import_excel_dialog import ImportExcelDialog
         dialog = ImportExcelDialog(self._project_list, self)
-        dialog.exec_()
+        result = dialog.exec_()
         # ダイアログ終了後に必ず一覧を再読み込み
+        # データベースの変更を確実に反映するため、少し待機してから再読み込み
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(100, self._force_refresh)
+    
+    def _force_refresh(self):
+        """強制的にプロジェクトとシナリオ一覧を再読み込み"""
         self._load_projects()
         self._load_scenarios()
+        print("Excelインポート後の一覧更新完了")
 
     def _on_refresh(self):
         """
@@ -241,5 +297,8 @@ class ScenarioListWidget(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        self._load_projects()
-        self._load_scenarios()
+        # 初回表示時のみデータを読み込む
+        if not hasattr(self, '_initialized'):
+            self._load_projects()
+            self._load_scenarios()
+            self._initialized = True

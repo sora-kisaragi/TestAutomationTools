@@ -157,6 +157,9 @@ class ImportExcelDialog(QDialog):
             )
             self.set_result(result_list)
             QMessageBox.information(self, "インポート完了", "Excelからのインポートが完了しました。結果を確認してください。")
+            # インポート完了を親ウィジェットに通知
+            if hasattr(self.parent(), '_force_refresh'):
+                self.parent()._force_refresh()
         except Exception as e:
             QMessageBox.critical(self, "インポートエラー", f"Excelインポート中にエラーが発生しました:\n{str(e)}")
         # ダイアログは閉じない
