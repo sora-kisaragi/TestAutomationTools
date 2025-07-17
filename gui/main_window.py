@@ -100,6 +100,9 @@ class MainWindow(QMainWindow):
             self.scenario_tab.setCurrentIndex(1)
         def goto_list():
             self.scenario_tab.setCurrentIndex(0)
+            # 一覧タブに戻る際に最新データを読み込み
+            if hasattr(self.scenario_list_widget, '_force_refresh'):
+                self.scenario_list_widget._force_refresh()
         btn_new.clicked.connect(goto_create)
         btn_to_list.clicked.connect(goto_list)
 

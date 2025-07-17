@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS test_cases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     screen_id INTEGER NOT NULL,
     name TEXT NOT NULL,
+    status TEXT DEFAULT '未実行',
+    last_run TEXT,
+    result TEXT,
     remarks TEXT,
     FOREIGN KEY(screen_id) REFERENCES screens(id)
 );
@@ -196,7 +199,33 @@ def init_db():
                     # 既に存在する場合はスキップ
                     pass
         
+        # マイグレーション: test_casesテーブルにカラムを追加
+        _migrate_test_cases_table(conn)
+        
         conn.commit()
+
+def _migrate_test_cases_table(conn):
+    """
+    test_casesテーブルのマイグレーション
+    既存のテーブルに新しいカラムを追加
+    """
+    try:
+        # カラムの存在確認
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(test_cases)")
+        columns = [row[1] for row in cur.fetchall()]
+        
+        # 不足しているカラムを追加
+        if 'status' not in columns:
+            conn.execute("ALTER TABLE test_cases ADD COLUMN status TEXT DEFAULT '未実行'")
+        if 'last_run' not in columns:
+            conn.execute("ALTER TABLE test_cases ADD COLUMN last_run TEXT")
+        if 'result' not in columns:
+            conn.execute("ALTER TABLE test_cases ADD COLUMN result TEXT")
+            
+        print("test_casesテーブルのマイグレーション完了")
+    except Exception as e:
+        print(f"マイグレーションエラー: {e}")
 
 def get_next_bug_no(project_id: int) -> int:
     """
