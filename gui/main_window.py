@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QListWidget, QStackedWidget, QTabWidget, QPushButton, QVBoxLayout, QLabel
 )
 from gui.scenario.scenario_creation_widget import ScenarioCreationWidget
+from gui.scenario.scenario_delete_widget import ScenarioDeleteWidget
 from gui.bug.bug_entry_widget import BugEntryWidget
 from gui.scenario.scenario_list_widget import ScenarioListWidget
 from gui.project.project_management_widget import ProjectManagementWidget
@@ -17,6 +18,7 @@ from gui.testcase_management_widget import TestCaseManagementWidget
 from gui.testitem_management_widget import TestItemManagementWidget
 from gui.test.test_execution_window import TestExecutionWindow
 from gui.test.test_scenario_select_window import TestScenarioSelectWindow
+from gui.common.import_excel_tab import ImportExcelTab
 
 class MainWindow(QMainWindow):
     """
@@ -59,34 +61,32 @@ class MainWindow(QMainWindow):
         # --- 一覧タブ ---
         scenario_list_tab = QWidget()
         vbox = QVBoxLayout(scenario_list_tab)
-        # 上部ボタンエリア
-        btn_area = QHBoxLayout()
-        btn_new = QPushButton("新規作成")
-        btn_import = QPushButton("Excelインポート")
-        btn_export = QPushButton("Excelエクスポート")
-        btn_area.addWidget(btn_new)
-        btn_area.addWidget(btn_import)
-        btn_area.addWidget(btn_export)
-        btn_area.addStretch()
-        vbox.addLayout(btn_area)
+        # ツールバーを削除し、一覧テーブルのみ配置
         self.scenario_list_widget = ScenarioListWidget()
         vbox.addWidget(self.scenario_list_widget)
         self.scenario_tab.addTab(scenario_list_tab, "一覧")
 
-        # --- 作成タブ ---
-        scenario_create_tab = QWidget()
-        vbox_create = QVBoxLayout(scenario_create_tab)
-        self.scenario_creation_widget = ScenarioCreationWidget()
-        vbox_create.addWidget(self.scenario_creation_widget)
-        btn_to_list = QPushButton("一覧へ")
-        vbox_create.addWidget(btn_to_list)
-        self.scenario_tab.addTab(scenario_create_tab, "作成")
+        # --- プロジェクト管理タブ (追加・削除) ---
+        proj_manage_tab = QWidget()
+        vbox_pm = QVBoxLayout(proj_manage_tab)
+        self.project_management_widget = ProjectManagementWidget()
+        vbox_pm.addWidget(self.project_management_widget)
+        self.scenario_tab.addTab(proj_manage_tab, "プロジェクト管理")
 
-        # --- インポート・エクスポートタブ（プレースホルダー）---
-        import_tab = QWidget()
-        import_layout = QVBoxLayout(import_tab)
-        import_layout.addWidget(QLabel("Excelインポート画面（今後拡張予定）"))
-        self.scenario_tab.addTab(import_tab, "インポート")
+        # --- シナリオ管理タブ (追加 / 削除) ---
+        scenario_mgmt_tab = QTabWidget()
+        # 追加タブ
+        self.scenario_creation_widget = ScenarioCreationWidget()
+        scenario_mgmt_tab.addTab(self.scenario_creation_widget, "追加")
+        # 削除タブ
+        self.scenario_delete_widget = ScenarioDeleteWidget()
+        scenario_mgmt_tab.addTab(self.scenario_delete_widget, "削除")
+        self.scenario_tab.addTab(scenario_mgmt_tab, "シナリオ管理")
+
+        # --- インポート・エクスポートタブ ---
+        import_tab = ImportExcelTab()
+        import_tab.import_completed.connect(self.scenario_list_widget._force_refresh)
+        self.scenario_tab.addTab(import_tab, "一括インポート")
 
         export_tab = QWidget()
         export_layout = QVBoxLayout(export_tab)
@@ -95,16 +95,9 @@ class MainWindow(QMainWindow):
 
         self.stack.addWidget(self.scenario_tab)
 
-        # ボタンの画面遷移ロジック
-        def goto_create():
-            self.scenario_tab.setCurrentIndex(1)
-        def goto_list():
-            self.scenario_tab.setCurrentIndex(0)
-            # 一覧タブに戻る際に最新データを読み込み
-            if hasattr(self.scenario_list_widget, '_force_refresh'):
-                self.scenario_list_widget._force_refresh()
-        btn_new.clicked.connect(goto_create)
-        btn_to_list.clicked.connect(goto_list)
+        # 一覧タブ → 作成タブの遷移はタブ自体をクリックしてもらう方式に変更
+        # シナリオ作成内の一覧へボタンをタブクリック方式に変更、不要なら非表示
+        # btn_to_list.setVisible(False)
 
         # テスト管理（サブタブ：一覧・実行・結果記録・エクスポート）
         self.test_tab = QTabWidget()
