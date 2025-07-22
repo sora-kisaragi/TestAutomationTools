@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor
+from typing import Optional
 import os
 import sqlite3
 
@@ -19,7 +20,7 @@ class ImportExcelTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         scenario_db.init_db()
-        self.selected_file: str | None = None
+        self.selected_file: Optional[str] = None
         self._load_projects()
         self._init_ui()
 

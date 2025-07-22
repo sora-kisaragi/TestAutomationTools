@@ -97,7 +97,7 @@ class ScenarioDeleteWidget(QWidget):
         screen_id = self.screen_combo.currentData()
         keyword = self.keyword_edit.text().strip().lower()
 
-        self.table.setRowCount(0)
+        # 取得
         with sqlite3.connect(scenario_db.DB_PATH) as conn:
             cur = conn.cursor()
             sql = (
@@ -114,12 +114,15 @@ class ScenarioDeleteWidget(QWidget):
                 params.append(screen_id)
             sql += "ORDER BY tc.id"
             cur.execute(sql, params)
-            rows = cur.fetchall()
+            all_rows = cur.fetchall()
 
-        for row_idx, (cid, screen_name, scenario_name, status, last_run, result) in enumerate(rows):
-            if keyword and keyword not in scenario_name.lower():
-                continue
-            self.table.insertRow(self.table.rowCount())
+        # フィルタリング
+        rows_to_show = [r for r in all_rows if not keyword or keyword in r[2].lower()]
+
+        # 一度に行数を設定
+        self.table.setRowCount(len(rows_to_show))
+
+        for row_idx, (cid, screen_name, scenario_name, status, last_run, result) in enumerate(rows_to_show):
             # チェックボックス
             chk_item = QTableWidgetItem()
             chk_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
