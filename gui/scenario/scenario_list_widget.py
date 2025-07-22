@@ -8,6 +8,7 @@ from core import scenario_db
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView, QPushButton, QHBoxLayout, QLineEdit, QLabel, QComboBox
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
+from typing import Optional
 
 class ScenarioListWidget(QWidget):
     """
@@ -158,7 +159,7 @@ class ScenarioListWidget(QWidget):
             self.current_project.setText("現在: - (該当なし)")
             self._load_scenarios()
 
-    def _load_scenarios(self, keyword: str = "", project_id: int | None = None):
+    def _load_scenarios(self, keyword: str = "", project_id: Optional[int] = None):
         """シナリオ一覧を取得してテーブルに表示（キーワード・プロジェクト対応）"""
         import sqlite3
         # データ読み込み前にテーブルをクリア

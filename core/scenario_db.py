@@ -160,7 +160,7 @@ CREATE_MASTER_TABLES = [
 
 # 初期マスターデータ
 INITIAL_MASTER_DATA = {
-    "master_testers": ["宗廣", "井上", "遠藤", "田中"],
+    "master_testers": ["テスターA", "テスターB", "テスターC"],
     "master_test_types": ["単体テスト", "結合テスト", "システムテスト", "受入テスト", "回帰テスト"],
     "master_statuses": ["未対応", "対応中", "修正済み", "保留", "却下", "再現不可", "クローズ"],
     "master_severities": ["致命的", "高", "中", "低"],

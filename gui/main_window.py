@@ -95,9 +95,7 @@ class MainWindow(QMainWindow):
 
         self.stack.addWidget(self.scenario_tab)
 
-        # 一覧タブ → 作成タブの遷移はタブ自体をクリックしてもらう方式に変更
-        # シナリオ作成内の一覧へボタンをタブクリック方式に変更、不要なら非表示
-        # btn_to_list.setVisible(False)
+        # 一覧タブとシナリオ管理タブの遷移は上部タブのクリック操作に統一
 
         # テスト管理（サブタブ：一覧・実行・結果記録・エクスポート）
         self.test_tab = QTabWidget()
