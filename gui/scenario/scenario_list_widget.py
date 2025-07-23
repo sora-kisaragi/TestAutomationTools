@@ -8,6 +8,7 @@ from core import scenario_db
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView, QPushButton, QHBoxLayout, QLineEdit, QLabel, QComboBox
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
+from typing import Optional
 
 class ScenarioListWidget(QWidget):
     """
@@ -45,20 +46,7 @@ class ScenarioListWidget(QWidget):
         proj_layout.addStretch()
         layout.addLayout(proj_layout)
 
-        # 上部ボタンエリア
-        btn_area = QHBoxLayout()
-        self.btn_new = QPushButton("新規作成")
-        self.btn_import = QPushButton("Excelインポート")
-        self.btn_import.clicked.connect(self._on_excel_import)
-        self.btn_export = QPushButton("Excelエクスポート")
-        self.refresh_button = QPushButton("更新")
-        self.refresh_button.clicked.connect(self._on_refresh)
-        btn_area.addWidget(self.btn_new)
-        btn_area.addWidget(self.btn_import)
-        btn_area.addWidget(self.btn_export)
-        btn_area.addWidget(self.refresh_button)
-        btn_area.addStretch()
-        layout.addLayout(btn_area)
+        # 上部の操作ボタンは一覧画面では不要になったため削除
 
         # 検索欄
         search_layout = QHBoxLayout()
@@ -171,7 +159,7 @@ class ScenarioListWidget(QWidget):
             self.current_project.setText("現在: - (該当なし)")
             self._load_scenarios()
 
-    def _load_scenarios(self, keyword: str = "", project_id: int | None = None):
+    def _load_scenarios(self, keyword: str = "", project_id: Optional[int] = None):
         """シナリオ一覧を取得してテーブルに表示（キーワード・プロジェクト対応）"""
         import sqlite3
         # データ読み込み前にテーブルをクリア

@@ -31,6 +31,7 @@ class ProjectManagementWidget(QWidget):
         self.del_btn = QPushButton("削除")
         self.del_btn.clicked.connect(self._delete_project)
         btn_layout.addWidget(self.del_btn)
+        # Excel一括取込ボタンは不要のため削除
         layout.addLayout(btn_layout)
 
     def _load_projects(self):
@@ -87,3 +88,5 @@ class ProjectManagementWidget(QWidget):
             else:
                 QMessageBox.information(self, "削除完了", f"選択したプロジェクトを削除しました")
             self._load_projects()
+
+    # _excel_import メソッドは不要になったため削除

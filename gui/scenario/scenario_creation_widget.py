@@ -35,10 +35,9 @@ class ScenarioCreationWidget(QWidget):
         self.project_list = QListWidget()
         self.project_list.itemSelectionChanged.connect(self._on_project_selected)
         vbox.addWidget(self.project_list)
-        # 削除ボタン追加
-        self.delete_project_btn = QPushButton("選択プロジェクト削除")
-        self.delete_project_btn.clicked.connect(self._delete_project)
-        vbox.addWidget(self.delete_project_btn)
+        # プロジェクト削除は専用タブに移動したためボタンを非表示
+        # self.delete_project_btn = QPushButton("選択プロジェクト削除")
+        # self.delete_project_btn.clicked.connect(self._delete_project)
         container = QWidget()
         container.setLayout(vbox)
         layout.addWidget(container, 1)
@@ -143,18 +142,7 @@ class ScenarioCreationWidget(QWidget):
         self.save_button = QPushButton("保存")
         self.save_button.clicked.connect(self._save_test_item)
         button_layout.addWidget(self.save_button)
-        self.import_button = QPushButton("インポート")
-        self.import_button.clicked.connect(self.show_import_dialog)
-        button_layout.addWidget(self.import_button)
-        self.excel_import_button = QPushButton("Excelインポート")
-        self.excel_import_button.clicked.connect(self.show_excel_import_dialog)
-        button_layout.addWidget(self.excel_import_button)
-        self.csv_sample_button = QPushButton("CSVサンプル表示")
-        self.csv_sample_button.clicked.connect(self.show_csv_sample)
-        button_layout.addWidget(self.csv_sample_button)
-        self.export_csv_button = QPushButton("CSVサンプル出力")
-        self.export_csv_button.clicked.connect(self.export_csv_sample)
-        button_layout.addWidget(self.export_csv_button)
+        # CSVインポートボタンも不要
         layout.addLayout(button_layout)
 
     def _wrap_widget(self, layout):
@@ -588,7 +576,13 @@ class ScenarioCreationWidget(QWidget):
         """
         CSVサンプル内容をダイアログで表示
         """
-        QMessageBox.information(self, "CSVサンプル", f"CSV例:\n\n{CSV_SAMPLE}\n(カンマ区切り・1行1レコード)")
+        QMessageBox.information(
+            self,
+            "CSVサンプル",
+            "CSV例 (画面名, シナリオ名, ステータス, 最終実行日, 実行結果):\n\n"
+            + CSV_SAMPLE
+            + "\n(カンマ区切り・1行1レコード)"
+        )
 
     def export_csv_sample(self):
         """
