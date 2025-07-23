@@ -75,16 +75,12 @@ class MainWindow(QMainWindow):
         vbox_pm.addWidget(self.project_management_widget)
         self.scenario_tab.addTab(proj_manage_tab, "プロジェクト管理")
 
-        # --- シナリオ作成タブ ---
-        self.scenario_creation_widget = ScenarioCreationWidget()
-        # シナリオ作成時に他のタブを更新
-        self.scenario_creation_widget.scenario_created.connect(self._on_scenario_changed)
-        self.scenario_tab.addTab(self.scenario_creation_widget, "シナリオ作成")
-        
-        # --- シナリオ削除タブ ---
-        self.scenario_delete_widget = ScenarioDeleteWidget()
-        self.scenario_delete_widget.deletion_completed.connect(self.scenario_list_widget._force_refresh)
-        self.scenario_tab.addTab(self.scenario_delete_widget, "シナリオ削除")
+        # --- シナリオ編集タブ（作成・削除統合） ---
+        from gui.scenario.scenario_management_widget import ScenarioManagementWidget
+        self.scenario_management_widget = ScenarioManagementWidget()
+        # シナリオ変更時に他のタブを更新
+        self.scenario_management_widget.scenario_changed.connect(self._on_scenario_changed)
+        self.scenario_tab.addTab(self.scenario_management_widget, "シナリオ編集")
 
         # --- インポート・エクスポートタブ ---
         import_tab = ImportExcelTab()
@@ -243,13 +239,12 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'scenario_list_widget'):
             self.scenario_list_widget._force_refresh()
         
-        # シナリオ作成タブを更新
-        if hasattr(self, 'scenario_creation_widget'):
-            self.scenario_creation_widget._load_projects()
-        
-        # シナリオ削除タブを更新
-        if hasattr(self, 'scenario_delete_widget'):
-            self.scenario_delete_widget._load_projects()
+        # 統合されたシナリオ管理ウィジェット内の作成・削除タブを更新
+        if hasattr(self, 'scenario_management_widget'):
+            if hasattr(self.scenario_management_widget.creation_widget, '_load_projects'):
+                self.scenario_management_widget.creation_widget._load_projects()
+            if hasattr(self.scenario_management_widget.delete_widget, '_load_projects'):
+                self.scenario_management_widget.delete_widget._load_projects()
 
     def _on_scenario_changed(self):
         """
@@ -259,9 +254,9 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'scenario_list_widget'):
             self.scenario_list_widget._force_refresh()
         
-        # シナリオ削除タブを更新（新しく作成されたシナリオを削除対象として表示）
-        if hasattr(self, 'scenario_delete_widget'):
-            self.scenario_delete_widget._load_table()
+        # 統合されたシナリオ管理ウィジェット内の削除タブを更新
+        if hasattr(self, 'scenario_management_widget'):
+            self.scenario_management_widget._on_scenario_updated()
 
     def _create_management_tab(self) -> QWidget:
         """
