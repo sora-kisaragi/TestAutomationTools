@@ -90,8 +90,6 @@ class ImportExcelTab(QWidget):
                 break
 
     # ------------------------------ Slots ------------------------------
-    # ラジオボタンは廃止したため不要
-
     def _on_select_file(self):
         path, _ = QFileDialog.getOpenFileName(self, "Excelファイルを選択", "", "Excel Files (*.xlsx *.xls)")
         if path:
