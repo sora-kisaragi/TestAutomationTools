@@ -46,9 +46,10 @@ class ScenarioDeleteWidget(QWidget):
         deselect_btn = QPushButton("選択解除")
         deselect_btn.clicked.connect(lambda: self._select_all(False))
         btn_layout.addWidget(deselect_btn)
-        delete_btn = QPushButton("選択シナリオを削除")
-        delete_btn.clicked.connect(self._delete_selected)
-        btn_layout.addWidget(delete_btn)
+        self.delete_btn = QPushButton("選択シナリオを削除")
+        self.delete_btn.setEnabled(False)  # Initially disabled
+        self.delete_btn.clicked.connect(self._delete_selected)
+        btn_layout.addWidget(self.delete_btn)
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
