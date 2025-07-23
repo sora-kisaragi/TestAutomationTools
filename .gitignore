@@ -143,3 +143,6 @@ temp/
 *.db
 *.sqlite
 *.sqlite3 
+
+# AI Agent
+.claude/
