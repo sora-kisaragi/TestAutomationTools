@@ -24,12 +24,12 @@ class ScenarioDeleteWidget(QWidget):
         # フィルタバー
         filter_layout = QHBoxLayout()
         self.project_combo = QComboBox()
-        self.project_combo.currentIndexChanged.connect(self._on_filter_changed)
+        self.project_combo.currentIndexChanged.connect(self._on_project_changed)
         filter_layout.addWidget(QLabel("プロジェクト:"))
         filter_layout.addWidget(self.project_combo)
 
         self.screen_combo = QComboBox()
-        self.screen_combo.currentIndexChanged.connect(self._on_filter_changed)
+        self.screen_combo.currentIndexChanged.connect(self._on_screen_changed)
         filter_layout.addWidget(QLabel("画面:"))
         filter_layout.addWidget(self.screen_combo)
 
@@ -79,7 +79,7 @@ class ScenarioDeleteWidget(QWidget):
             for pid, name in self._projects:
                 self.project_combo.addItem(name, pid)
         self.project_combo.blockSignals(False)
-        self._on_filter_changed()
+        self._on_project_changed()
 
     def _load_screens(self, project_id):
         self.screen_combo.blockSignals(True)
@@ -114,7 +114,8 @@ class ScenarioDeleteWidget(QWidget):
             if project_id:
                 sql += "AND s.project_id=? "
                 params.append(project_id)
-            if screen_id:
+            # screen_idがNoneでない場合のみ条件追加（"(すべて)"が選択されている場合はNone）
+            if screen_id is not None:
                 sql += "AND s.id=? "
                 params.append(screen_id)
             sql += "ORDER BY tc.id"
@@ -145,9 +146,18 @@ class ScenarioDeleteWidget(QWidget):
         self.delete_btn.setEnabled(False)
 
     # -------------------- Slots --------------------
-    def _on_filter_changed(self):
+    def _on_project_changed(self):
+        """プロジェクト変更時の処理"""
         project_id = self.project_combo.currentData()
         self._load_screens(project_id)
+        self._load_table()
+    
+    def _on_screen_changed(self):
+        """画面変更時の処理"""
+        self._load_table()
+    
+    def _on_filter_changed(self):
+        """検索ボタン押下時の処理"""
         self._load_table()
 
     def _select_all(self, checked: bool):

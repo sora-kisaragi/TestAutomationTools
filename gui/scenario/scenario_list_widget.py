@@ -52,7 +52,7 @@ class ScenarioListWidget(QWidget):
         search_layout = QHBoxLayout()
         search_label = QLabel("検索キーワード:")
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("シナリオ名・画面名・担当者など")
+        self.search_edit.setPlaceholderText("テスト項目名・テストケース名・画面名・担当者など")
         self.search_button = QPushButton("検索")
         self.search_button.clicked.connect(self._on_search)
         search_layout.addWidget(search_label)
@@ -71,17 +71,22 @@ class ScenarioListWidget(QWidget):
     
     def _init_table(self):
         """テーブルの初期化"""
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(8)
         self.table.setHorizontalHeaderLabels([
-            "シナリオ名", "画面名", "ステータス", "最終実行日", "実行結果", "プロジェクト", "操作"
+            "プロジェクト", "画面名", "テストケース", "テスト項目名", "優先度", "担当者", "結果", "操作"
         ])
         header = self.table.horizontalHeader()
         if header:
             header.setSectionResizeMode(QHeaderView.Stretch)
             # 水平ヘッダー（列ヘッダー）を表示
             header.setVisible(True)
+            # ソート機能を有効化
+            header.setSortIndicatorShown(True)
+            header.sectionClicked.connect(self._on_header_clicked)
         self.table.setSelectionBehavior(self.table.SelectRows)
         self.table.setEditTriggers(self.table.NoEditTriggers)
+        # ソート機能を有効化
+        self.table.setSortingEnabled(True)
         # 垂直ヘッダー（行番号）のみ非表示
         vheader = self.table.verticalHeader()
         if vheader:
@@ -160,79 +165,108 @@ class ScenarioListWidget(QWidget):
             self._load_scenarios()
 
     def _load_scenarios(self, keyword: str = "", project_id: Optional[int] = None):
-        """シナリオ一覧を取得してテーブルに表示（キーワード・プロジェクト対応）"""
+        """テスト項目一覧を取得してテーブルに表示（キーワード・プロジェクト対応）"""
         import sqlite3
         # データ読み込み前にテーブルをクリア
         self.table.clearContents()
         self.table.setRowCount(0)
-        scenarios = []
+        test_items = []
         try:
             with sqlite3.connect(scenario_db.DB_PATH) as conn:
                 cur = conn.cursor()
-                # テストケーステーブルからシナリオ情報を取得
+                # テスト項目テーブルから詳細情報を取得
                 if project_id:
                     cur.execute("""
-                        SELECT tc.id, tc.name, s.name as screen_name, tc.status, tc.last_run, tc.result, s.project_id
-                        FROM test_cases tc
+                        SELECT 
+                            p.name as project_name,
+                            s.name as screen_name,
+                            tc.name as testcase_name,
+                            ti.name as testitem_name,
+                            ti.priority,
+                            ti.tester,
+                            ti.result
+                        FROM test_items ti
+                        JOIN test_cases tc ON ti.test_case_id = tc.id
                         JOIN screens s ON tc.screen_id = s.id
-                        WHERE s.project_id = ?
-                        ORDER BY tc.id
+                        JOIN projects p ON s.project_id = p.id
+                        WHERE p.id = ?
+                        ORDER BY p.name, s.name, tc.name, ti.id
                     """, (project_id,))
                 else:
                     cur.execute("""
-                        SELECT tc.id, tc.name, s.name as screen_name, tc.status, tc.last_run, tc.result, s.project_id
-                        FROM test_cases tc
+                        SELECT 
+                            p.name as project_name,
+                            s.name as screen_name,
+                            tc.name as testcase_name,
+                            ti.name as testitem_name,
+                            ti.priority,
+                            ti.tester,
+                            ti.result
+                        FROM test_items ti
+                        JOIN test_cases tc ON ti.test_case_id = tc.id
                         JOIN screens s ON tc.screen_id = s.id
-                        ORDER BY tc.id
+                        JOIN projects p ON s.project_id = p.id
+                        ORDER BY p.name, s.name, tc.name, ti.id
                     """)
                 for row in cur.fetchall():
-                    scenarios.append({
-                        'id': row[0],
-                        'scenario_name': row[1],
-                        'screen_name': row[2],
-                        'status': row[3] or '未実行',
-                        'last_run': row[4] or '-',
-                        'result': row[5] or '-',
-                        'project': self._get_project_name(row[6])
+                    test_items.append({
+                        'project_name': row[0],
+                        'screen_name': row[1],
+                        'testcase_name': row[2],
+                        'testitem_name': row[3],
+                        'priority': row[4] or '-',
+                        'tester': row[5] or '-',
+                        'result': row[6] or '未実施'
                     })
         except Exception as e:
             print(f"DBエラー: {e}")
             print(f"詳細: {str(e)}")
         if keyword:
             keyword_lower = keyword.lower()
-            scenarios = [s for s in scenarios if
-                keyword_lower in str(s['scenario_name']).lower() or
-                keyword_lower in str(s['project']).lower()
+            test_items = [item for item in test_items if
+                keyword_lower in str(item['testcase_name']).lower() or
+                keyword_lower in str(item['testitem_name']).lower() or
+                keyword_lower in str(item['screen_name']).lower() or
+                keyword_lower in str(item['project_name']).lower() or
+                keyword_lower in str(item['tester']).lower()
             ]
         # データがない場合は空のテーブルを表示
-        if not scenarios:
+        if not test_items:
             self.table.setRowCount(0)
             return
             
         # 既存のセルウィジェットをクリア
         self.table.clearContents()
-        self.table.setRowCount(len(scenarios))
+        self.table.setRowCount(len(test_items))
         
-        for row, scenario in enumerate(scenarios):
+        for row, item in enumerate(test_items):
             # データ行のみにアイテムを設定
-            self.table.setItem(row, 0, QTableWidgetItem(scenario['scenario_name']))
-            self.table.setItem(row, 1, QTableWidgetItem(scenario.get('screen_name', '-')))
-            # ステータス色分け
-            status_item = QTableWidgetItem(scenario.get('status', '-'))
-            if scenario.get('status') == '合格':
-                status_item.setForeground(QColor('green'))
-            elif scenario.get('status') == '不合格':
-                status_item.setForeground(QColor('red'))
-            self.table.setItem(row, 2, status_item)
-            self.table.setItem(row, 3, QTableWidgetItem(scenario.get('last_run', '-')))
+            self.table.setItem(row, 0, QTableWidgetItem(item['project_name']))
+            self.table.setItem(row, 1, QTableWidgetItem(item['screen_name']))
+            self.table.setItem(row, 2, QTableWidgetItem(item['testcase_name']))
+            self.table.setItem(row, 3, QTableWidgetItem(item['testitem_name']))
+            
+            # 優先度色分け
+            priority_item = QTableWidgetItem(item['priority'])
+            if item['priority'] == '高':
+                priority_item.setForeground(QColor('red'))
+            elif item['priority'] == '中':
+                priority_item.setForeground(QColor('orange'))
+            elif item['priority'] == '低':
+                priority_item.setForeground(QColor('blue'))
+            self.table.setItem(row, 4, priority_item)
+            
+            self.table.setItem(row, 5, QTableWidgetItem(item['tester']))
+            
             # 実行結果色分け
-            result_item = QTableWidgetItem(scenario.get('result', '-'))
-            if scenario.get('result') == '合格':
+            result_item = QTableWidgetItem(item['result'])
+            if item['result'] == '成功':
                 result_item.setForeground(QColor('green'))
-            elif scenario.get('result') == '不合格':
+            elif item['result'] == '失敗':
                 result_item.setForeground(QColor('red'))
-            self.table.setItem(row, 4, result_item)
-            self.table.setItem(row, 5, QTableWidgetItem(scenario.get('project', '-')))
+            elif item['result'] == '要確認':
+                result_item.setForeground(QColor('orange'))
+            self.table.setItem(row, 6, result_item)
             
             # 操作ボタン（未実装機能のため一時的にコメントアウト）
             # TODO: 詳細・編集・実行機能の実装後に有効化
@@ -246,10 +280,10 @@ class ScenarioListWidget(QWidget):
             # op_layout.addWidget(btn_exec)
             # op_layout.setContentsMargins(0,0,0,0)
             # op_layout.addStretch()
-            # self.table.setCellWidget(row, 6, op_widget)
+            # self.table.setCellWidget(row, 7, op_widget)
             
             # 暫定的に操作列は空白を表示
-            self.table.setItem(row, 6, QTableWidgetItem("-"))
+            self.table.setItem(row, 7, QTableWidgetItem("-"))
 
     def _get_project_name(self, project_id):
         if not hasattr(self, '_project_list'):
@@ -284,6 +318,12 @@ class ScenarioListWidget(QWidget):
         """
         self._load_projects()
         self._load_scenarios()
+
+    def _on_header_clicked(self, logical_index):
+        """ヘッダークリック時の処理（ソート）"""
+        # PyQt5のQTableWidgetは自動的にソートを行うため、特別な処理は不要
+        # ただし、必要に応じてカスタムソート処理を追加可能
+        pass
 
     def showEvent(self, event):
         super().showEvent(event)
