@@ -2,12 +2,15 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton,
     QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QAbstractItemView
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 import sqlite3
 from core import scenario_db
 
 class ScenarioDeleteWidget(QWidget):
     """既存シナリオを複数選択して削除するウィジェット"""
+    # 削除完了時のシグナル
+    deletion_completed = pyqtSignal()
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         scenario_db.init_db()
@@ -61,6 +64,7 @@ class ScenarioDeleteWidget(QWidget):
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.itemChanged.connect(self._on_item_changed)
         layout.addWidget(self.table)
 
     # -------------------- Data Load --------------------
@@ -136,6 +140,9 @@ class ScenarioDeleteWidget(QWidget):
             self.table.setItem(row_idx, 3, QTableWidgetItem(status or '-'))
             self.table.setItem(row_idx, 4, QTableWidgetItem(last_run or '-'))
             self.table.setItem(row_idx, 5, QTableWidgetItem(result or '-'))
+        
+        # テーブル更新後は削除ボタンを無効化（選択状態がリセットされるため）
+        self.delete_btn.setEnabled(False)
 
     # -------------------- Slots --------------------
     def _on_filter_changed(self):
@@ -149,6 +156,36 @@ class ScenarioDeleteWidget(QWidget):
             item = self.table.item(row, 0)
             if item:
                 item.setCheckState(state)
+        self._update_delete_button_state()
+
+    def _on_item_changed(self, item):
+        """テーブルアイテム変更時の処理（チェックボックス状態変更を監視）"""
+        if item.column() == 0:  # チェックボックス列のみ
+            self._update_delete_button_state()
+
+    def _update_delete_button_state(self):
+        """削除ボタンの有効/無効状態を更新"""
+        has_checked = False
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            if item and item.checkState() == Qt.Checked:
+                has_checked = True
+                break
+        self.delete_btn.setEnabled(has_checked)
+
+    def _check_related_bugs(self, test_case_ids):
+        """指定されたテストケースに関連するバグ数を返す"""
+        with sqlite3.connect(scenario_db.DB_PATH) as conn:
+            cur = conn.cursor()
+            placeholders = ','.join('?' * len(test_case_ids))
+            cur.execute(f"""
+                SELECT COUNT(DISTINCT b.id) 
+                FROM bugs b 
+                JOIN test_items ti ON b.test_item_id = ti.id 
+                WHERE ti.test_case_id IN ({placeholders})
+            """, test_case_ids)
+            result = cur.fetchone()
+            return result[0] if result else 0
 
     def _delete_selected(self):
         cids = []
@@ -160,16 +197,70 @@ class ScenarioDeleteWidget(QWidget):
         if not cids:
             QMessageBox.information(self, "確認", "削除するシナリオを選択してください")
             return
+        
+        # 削除前に関連バグ情報を確認
+        related_bugs_count = self._check_related_bugs(cids)
+        confirmation_msg = f"選択した {len(cids)} 件のシナリオを削除しますか？"
+        if related_bugs_count > 0:
+            confirmation_msg += f"\n\n⚠️ 注意: {related_bugs_count} 件の関連バグ情報があります。\nシナリオ削除後、これらのバグ情報からテスト項目への参照は解除されます。"
+        
         reply = QMessageBox.question(
-            self, "確認", f"選択した {len(cids)} 件のシナリオを削除しますか？", QMessageBox.Yes | QMessageBox.No
+            self, "確認", confirmation_msg, QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.No:
             return
-        with sqlite3.connect(scenario_db.DB_PATH) as conn:
-            cur = conn.cursor()
-            for cid in cids:
-                cur.execute("DELETE FROM test_items WHERE test_case_id=?", (cid,))
-                cur.execute("DELETE FROM test_cases WHERE id=?", (cid,))
-            conn.commit()
-        QMessageBox.information(self, "削除完了", f"{len(cids)} 件のシナリオを削除しました")
-        self._load_table() 
+        
+        try:
+            with sqlite3.connect(scenario_db.DB_PATH) as conn:
+                cur = conn.cursor()
+                # トランザクション開始
+                conn.execute("BEGIN TRANSACTION")
+                
+                for cid in cids:
+                    # データ整合性を保つための適切な削除順序
+                    # 1. bugsテーブルのtest_item_id参照を解除
+                    cur.execute("""
+                        UPDATE bugs SET test_item_id = NULL 
+                        WHERE test_item_id IN (
+                            SELECT id FROM test_items WHERE test_case_id = ?
+                        )
+                    """, (cid,))
+                    
+                    # 2. test_itemsテーブルのbug_id参照を解除（念のため）
+                    cur.execute("UPDATE test_items SET bug_id = NULL WHERE test_case_id = ?", (cid,))
+                    
+                    # 3. test_itemsを削除
+                    cur.execute("DELETE FROM test_items WHERE test_case_id=?", (cid,))
+                    
+                    # 4. 最後にtest_casesを削除
+                    cur.execute("DELETE FROM test_cases WHERE id=?", (cid,))
+                
+                # 全ての処理が成功した場合のみコミット
+                conn.commit()
+                
+                # 削除完了メッセージ
+                completion_msg = f"{len(cids)} 件のシナリオを削除しました"
+                if related_bugs_count > 0:
+                    completion_msg += f"\n{related_bugs_count} 件のバグ情報の参照も更新されました"
+                QMessageBox.information(self, "削除完了", completion_msg)
+                
+                # テーブル更新と削除ボタン状態リセット
+                self._load_table()
+                self.delete_btn.setEnabled(False)  # 削除後はボタンを無効化
+                # 他の画面にも削除完了を通知
+                self.deletion_completed.emit()
+                
+        except sqlite3.Error as e:
+            # データベースエラーの場合
+            QMessageBox.critical(
+                self, 
+                "削除エラー", 
+                f"データベース操作中にエラーが発生しました:\n{str(e)}\n\n削除処理は中止されました。"
+            )
+        except Exception as e:
+            # その他の予期しないエラー
+            QMessageBox.critical(
+                self, 
+                "予期しないエラー", 
+                f"削除中に予期しないエラーが発生しました:\n{str(e)}\n\n削除処理は中止されました。"
+            ) 

@@ -309,6 +309,52 @@ def delete_project(project_id: int) -> None:
         cur.execute("DELETE FROM projects WHERE id=?", (project_id,))
         conn.commit()
 
+def delete_test_cases_safely(test_case_ids: list) -> dict:
+    """
+    テストケースを安全に削除し、関連するバグ情報の整合性を保つ
+    戻り値: {"deleted_test_cases": int, "updated_bugs": int}
+    """
+    if not test_case_ids:
+        return {"deleted_test_cases": 0, "updated_bugs": 0}
+    
+    with sqlite3.connect(DB_PATH) as conn:
+        cur = conn.cursor()
+        deleted_count = 0
+        updated_bugs_count = 0
+        
+        for cid in test_case_ids:
+            # 関連バグ数をカウント
+            cur.execute("""
+                SELECT COUNT(*) FROM bugs 
+                WHERE test_item_id IN (
+                    SELECT id FROM test_items WHERE test_case_id = ?
+                )
+            """, (cid,))
+            bug_count = cur.fetchone()[0]
+            updated_bugs_count += bug_count
+            
+            # データ整合性を保つための適切な削除順序
+            # 1. bugsテーブルのtest_item_id参照を解除
+            cur.execute("""
+                UPDATE bugs SET test_item_id = NULL 
+                WHERE test_item_id IN (
+                    SELECT id FROM test_items WHERE test_case_id = ?
+                )
+            """, (cid,))
+            
+            # 2. test_itemsテーブルのbug_id参照を解除（念のため）
+            cur.execute("UPDATE test_items SET bug_id = NULL WHERE test_case_id = ?", (cid,))
+            
+            # 3. test_itemsを削除
+            cur.execute("DELETE FROM test_items WHERE test_case_id=?", (cid,))
+            
+            # 4. 最後にtest_casesを削除
+            cur.execute("DELETE FROM test_cases WHERE id=?", (cid,))
+            deleted_count += 1
+        
+        conn.commit()
+        return {"deleted_test_cases": deleted_count, "updated_bugs": updated_bugs_count}
+
 def insert_bug(data: dict) -> str:
     """
     不具合情報をDBに登録し、表示用BUG-ID（例: BUG-0001）を返す

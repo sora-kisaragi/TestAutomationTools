@@ -70,18 +70,21 @@ class MainWindow(QMainWindow):
         proj_manage_tab = QWidget()
         vbox_pm = QVBoxLayout(proj_manage_tab)
         self.project_management_widget = ProjectManagementWidget()
+        # プロジェクト変更時に他のタブを更新
+        self.project_management_widget.project_changed.connect(self._on_project_changed)
         vbox_pm.addWidget(self.project_management_widget)
         self.scenario_tab.addTab(proj_manage_tab, "プロジェクト管理")
 
-        # --- シナリオ管理タブ (追加 / 削除) ---
-        scenario_mgmt_tab = QTabWidget()
-        # 追加タブ
+        # --- シナリオ作成タブ ---
         self.scenario_creation_widget = ScenarioCreationWidget()
-        scenario_mgmt_tab.addTab(self.scenario_creation_widget, "追加")
-        # 削除タブ
+        # シナリオ作成時に他のタブを更新
+        self.scenario_creation_widget.scenario_created.connect(self._on_scenario_changed)
+        self.scenario_tab.addTab(self.scenario_creation_widget, "シナリオ作成")
+        
+        # --- シナリオ削除タブ ---
         self.scenario_delete_widget = ScenarioDeleteWidget()
-        scenario_mgmt_tab.addTab(self.scenario_delete_widget, "削除")
-        self.scenario_tab.addTab(scenario_mgmt_tab, "シナリオ管理")
+        self.scenario_delete_widget.deletion_completed.connect(self.scenario_list_widget._force_refresh)
+        self.scenario_tab.addTab(self.scenario_delete_widget, "シナリオ削除")
 
         # --- インポート・エクスポートタブ ---
         import_tab = ImportExcelTab()
@@ -195,7 +198,9 @@ class MainWindow(QMainWindow):
         # 運用管理（プロジェクト・画面・テストケース・テスト項目）
         self.management_tab = QTabWidget()
         # --- プロジェクト管理タブ ---
-        self.management_tab.addTab(ProjectManagementWidget(), "プロジェクト管理")
+        self.management_project_widget = ProjectManagementWidget()
+        self.management_project_widget.project_changed.connect(self._on_project_changed)
+        self.management_tab.addTab(self.management_project_widget, "プロジェクト管理")
         # --- 画面管理タブ ---
         self.management_tab.addTab(ScreenManagementWidget(), "画面管理")
         # --- テストケース管理タブ ---
@@ -229,6 +234,34 @@ class MainWindow(QMainWindow):
         サイドバーの選択に応じてメインビューを切り替える
         """
         self.stack.setCurrentIndex(idx)
+
+    def _on_project_changed(self):
+        """
+        プロジェクト変更時に他のタブを更新
+        """
+        # シナリオ一覧タブを更新
+        if hasattr(self, 'scenario_list_widget'):
+            self.scenario_list_widget._force_refresh()
+        
+        # シナリオ作成タブを更新
+        if hasattr(self, 'scenario_creation_widget'):
+            self.scenario_creation_widget._load_projects()
+        
+        # シナリオ削除タブを更新
+        if hasattr(self, 'scenario_delete_widget'):
+            self.scenario_delete_widget._load_projects()
+
+    def _on_scenario_changed(self):
+        """
+        シナリオ・テスト項目作成時に他のタブを更新
+        """
+        # シナリオ一覧タブを更新
+        if hasattr(self, 'scenario_list_widget'):
+            self.scenario_list_widget._force_refresh()
+        
+        # シナリオ削除タブを更新（新しく作成されたシナリオを削除対象として表示）
+        if hasattr(self, 'scenario_delete_widget'):
+            self.scenario_delete_widget._load_table()
 
     def _create_management_tab(self) -> QWidget:
         """

@@ -2,7 +2,7 @@
 シナリオ作成用ウィジェット
 """
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QLineEdit, QTextEdit, QComboBox, QPushButton, QDateEdit, QListWidget, QMessageBox, QScrollArea, QDialog
-from PyQt5.QtCore import QDate
+from PyQt5.QtCore import QDate, pyqtSignal
 import sqlite3
 import sys
 import os
@@ -16,6 +16,9 @@ class ScenarioCreationWidget(QWidget):
     """
     シナリオ作成用ウィジェット（左：プロジェクトリスト、上部：画面名選択、下部：テストケース・テスト項目入力）
     """
+    # シナリオ・テスト項目作成通知用シグナル
+    scenario_created = pyqtSignal()
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         scenario_db.init_db()
@@ -227,10 +230,15 @@ class ScenarioCreationWidget(QWidget):
             if not name or len(name) > 100:
                 QMessageBox.warning(self, "エラー", "テストケース名は1～100文字で入力してください")
                 return
-            with sqlite3.connect(scenario_db.DB_PATH) as conn:
-                self._get_or_create_case(conn.cursor(), sid, name)
-                conn.commit()
-            self._on_screen_changed()
+            try:
+                with sqlite3.connect(scenario_db.DB_PATH) as conn:
+                    self._get_or_create_case(conn.cursor(), sid, name)
+                    conn.commit()
+                self._on_screen_changed()
+                # 他のタブに作成完了を通知
+                self.scenario_created.emit()
+            except Exception as e:
+                QMessageBox.critical(self, "エラー", f"テストケース作成中にエラーが発生しました:\n{str(e)}")
 
     def _add_screen(self):
         """
@@ -246,13 +254,17 @@ class ScenarioCreationWidget(QWidget):
             if not name or len(name) > 100:
                 QMessageBox.warning(self, "エラー", "画面名は1～100文字で入力してください")
                 return
-            with sqlite3.connect(scenario_db.DB_PATH) as conn:
-                try:
+            try:
+                with sqlite3.connect(scenario_db.DB_PATH) as conn:
                     self._get_or_create_screen(conn.cursor(), pid, name)
                     conn.commit()
-                except sqlite3.IntegrityError:
-                    QMessageBox.warning(self, "エラー", "同名の画面が既に存在します")
-            self._load_screens(pid)
+                self._load_screens(pid)
+                # 他のタブに作成完了を通知
+                self.scenario_created.emit()
+            except sqlite3.IntegrityError:
+                QMessageBox.warning(self, "エラー", "同名の画面が既に存在します")
+            except Exception as e:
+                QMessageBox.critical(self, "エラー", f"画面作成中にエラーが発生しました:\n{str(e)}")
 
     def _clear_form(self):
         self.test_item_edit.clear()
@@ -289,20 +301,25 @@ class ScenarioCreationWidget(QWidget):
             "remarks": self.remarks_edit.toPlainText().strip()
         }
         # DB登録
-        with sqlite3.connect(scenario_db.DB_PATH) as conn:
-            cur = conn.cursor()
-            cur.execute('''
-                INSERT INTO test_items (
-                    test_case_id, name, input_data, operation, expected, priority, tester, exec_date, result, remarks
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                data["test_case_id"], data["name"], data["input_data"], data["operation"], data["expected"],
-                data["priority"], data["tester"], data["exec_date"], data["result"], data["remarks"]
-            ))
-            conn.commit()
-            item_id = cur.lastrowid
-        QMessageBox.information(self, "保存完了", f"テスト項目ID: {item_id} を保存しました")
-        self._clear_form()
+        try:
+            with sqlite3.connect(scenario_db.DB_PATH) as conn:
+                cur = conn.cursor()
+                cur.execute('''
+                    INSERT INTO test_items (
+                        test_case_id, name, input_data, operation, expected, priority, tester, exec_date, result, remarks
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    data["test_case_id"], data["name"], data["input_data"], data["operation"], data["expected"],
+                    data["priority"], data["tester"], data["exec_date"], data["result"], data["remarks"]
+                ))
+                conn.commit()
+                item_id = cur.lastrowid
+            QMessageBox.information(self, "保存完了", f"テスト項目ID: {item_id} を保存しました")
+            self._clear_form()
+            # 他のタブに作成完了を通知
+            self.scenario_created.emit()
+        except Exception as e:
+            QMessageBox.critical(self, "保存エラー", f"テスト項目の保存中にエラーが発生しました:\n{str(e)}")
 
     def _load_master_data(self):
         """
@@ -465,6 +482,8 @@ class ScenarioCreationWidget(QWidget):
             QMessageBox.critical(self, "インポートエラー", f"Excelインポート中にエラーが発生しました:\n{str(e)}")
             return
         self._load_projects()  # インポート後にプロジェクトリストを自動更新
+        # 他のタブに作成完了を通知
+        self.scenario_created.emit()
         dlg = ImportResultDialog(import_result, self)
         dlg.exec_()
 
@@ -550,6 +569,11 @@ class ScenarioCreationWidget(QWidget):
                 conn.commit()
         except Exception as e:
             return [{"screen": "-", "name": "-", "status": "失敗", "message": str(e)}]
+        
+        # 成功した場合は他のタブに通知
+        if result_list and any(r["status"] == "成功" for r in result_list):
+            self.scenario_created.emit()
+        
         return result_list
 
     def show_import_dialog(self):
