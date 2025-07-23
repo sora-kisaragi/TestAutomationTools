@@ -2,6 +2,7 @@
 プロジェクト管理ウィジェット（雛形）
 """
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QListWidget, QPushButton, QHBoxLayout, QMessageBox, QAbstractItemView
+from PyQt5.QtCore import pyqtSignal
 from core import scenario_db
 from gui.common.utils import get_text_dialog, get_selected_rows_from_listwidget
 
@@ -9,6 +10,9 @@ class ProjectManagementWidget(QWidget):
     """
     プロジェクト管理用ウィジェット
     """
+    # プロジェクト変更通知用シグナル
+    project_changed = pyqtSignal()
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self._init_ui()
@@ -53,15 +57,21 @@ class ProjectManagementWidget(QWidget):
             if not name or len(name) > 100:
                 QMessageBox.warning(self, "エラー", "プロジェクト名は1～100文字で入力してください")
                 return
-            import sqlite3
-            with sqlite3.connect(scenario_db.DB_PATH) as conn:
-                cur = conn.cursor()
-                try:
+            
+            try:
+                import sqlite3
+                with sqlite3.connect(scenario_db.DB_PATH) as conn:
+                    cur = conn.cursor()
                     cur.execute("INSERT INTO projects (name) VALUES (?)", (name,))
                     conn.commit()
-                except sqlite3.IntegrityError:
-                    QMessageBox.warning(self, "エラー", "同名のプロジェクトが既に存在します")
-            self._load_projects()
+                    QMessageBox.information(self, "作成完了", f"プロジェクト '{name}' を作成しました")
+                    self._load_projects()
+                    # 他のタブに変更を通知
+                    self.project_changed.emit()
+            except sqlite3.IntegrityError:
+                QMessageBox.warning(self, "エラー", "同名のプロジェクトが既に存在します")
+            except Exception as e:
+                QMessageBox.critical(self, "エラー", f"プロジェクト作成中にエラーが発生しました:\n{str(e)}")
 
     def _delete_project(self):
         # 共通関数で選択データ取得
@@ -77,16 +87,25 @@ class ProjectManagementWidget(QWidget):
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
-            errors = []
-            for pid, name in delete_targets:
-                try:
-                    scenario_db.delete_project(pid)
-                except Exception as e:
-                    errors.append(f"{name}: {str(e)}")
-            if errors:
-                QMessageBox.critical(self, "エラー", "\n".join(errors))
-            else:
-                QMessageBox.information(self, "削除完了", f"選択したプロジェクトを削除しました")
-            self._load_projects()
+            try:
+                errors = []
+                for pid, name in delete_targets:
+                    try:
+                        scenario_db.delete_project(pid)
+                    except Exception as e:
+                        errors.append(f"{name}: {str(e)}")
+                
+                if errors:
+                    QMessageBox.critical(self, "削除エラー", "\n".join(errors))
+                else:
+                    QMessageBox.information(self, "削除完了", f"選択したプロジェクトを削除しました")
+                    # 他のタブに変更を通知
+                    self.project_changed.emit()
+                
+                self._load_projects()
+                
+            except Exception as e:
+                QMessageBox.critical(self, "予期しないエラー", f"削除処理中に予期しないエラーが発生しました:\n{str(e)}")
+                self._load_projects()
 
     # _excel_import メソッドは不要になったため削除

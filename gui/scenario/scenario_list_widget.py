@@ -234,20 +234,22 @@ class ScenarioListWidget(QWidget):
             self.table.setItem(row, 4, result_item)
             self.table.setItem(row, 5, QTableWidgetItem(scenario.get('project', '-')))
             
-            # 操作ボタン（データ行のみ、最後のカラムに配置）
-            op_widget = QWidget()
-            op_layout = QHBoxLayout(op_widget)
-            btn_detail = QPushButton("詳細")
-            btn_edit = QPushButton("編集")
-            btn_exec = QPushButton("実行")
-            op_layout.addWidget(btn_detail)
-            op_layout.addWidget(btn_edit)
-            op_layout.addWidget(btn_exec)
-            op_layout.setContentsMargins(0,0,0,0)
-            op_layout.addStretch()
-            # 確実に最後のカラム（6番目）に配置
-            self.table.setCellWidget(row, 6, op_widget)
-            print(f"ボタンを配置: 行={row}, カラム=6")
+            # 操作ボタン（未実装機能のため一時的にコメントアウト）
+            # TODO: 詳細・編集・実行機能の実装後に有効化
+            # op_widget = QWidget()
+            # op_layout = QHBoxLayout(op_widget)
+            # btn_detail = QPushButton("詳細")
+            # btn_edit = QPushButton("編集")
+            # btn_exec = QPushButton("実行")
+            # op_layout.addWidget(btn_detail)
+            # op_layout.addWidget(btn_edit)
+            # op_layout.addWidget(btn_exec)
+            # op_layout.setContentsMargins(0,0,0,0)
+            # op_layout.addStretch()
+            # self.table.setCellWidget(row, 6, op_widget)
+            
+            # 暫定的に操作列は空白を表示
+            self.table.setItem(row, 6, QTableWidgetItem("-"))
 
     def _get_project_name(self, project_id):
         if not hasattr(self, '_project_list'):
