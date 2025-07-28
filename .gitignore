@@ -146,6 +146,7 @@ temp/
 
 # AI Agent
 .claude/
+.cursor/
 
 # Work notes and TODO files (not for version control)
 work_notes/

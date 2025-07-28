@@ -45,7 +45,7 @@ class TestExecutionWindow(QWidget):
         with sqlite3.connect(scenario_db.DB_PATH) as conn:
             cur = conn.cursor()
             cur.execute("""
-                SELECT id, name, input_data, operation, expected, priority, assignee, exec_date, result, bug_id, remarks
+                SELECT id, name, input_data, operation, expected, priority, tester, exec_date, result, bug_id, remarks
                 FROM test_items WHERE test_case_id=? ORDER BY id
             """, (self.test_case_id,))
             items = cur.fetchall()
@@ -79,7 +79,7 @@ class TestExecutionWindow(QWidget):
                     values.append(val)
                 cur.execute("""
                     UPDATE test_items SET
-                        name=?, input_data=?, operation=?, expected=?, priority=?, assignee=?, exec_date=?, result=?, bug_id=?, remarks=?
+                        name=?, input_data=?, operation=?, expected=?, priority=?, tester=?, exec_date=?, result=?, bug_id=?, remarks=?
                     WHERE id=?
                 """, (*values, item_id))
             conn.commit()

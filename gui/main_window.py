@@ -18,6 +18,7 @@ from gui.testcase_management_widget import TestCaseManagementWidget
 from gui.testitem_management_widget import TestItemManagementWidget
 from gui.test.test_execution_window import TestExecutionWindow
 from gui.test.test_scenario_select_window import TestScenarioSelectWindow
+from gui.test.test_management_widget import TestManagementWidget
 from gui.common.import_excel_tab import ImportExcelTab
 
 class MainWindow(QMainWindow):
@@ -98,20 +99,13 @@ class MainWindow(QMainWindow):
 
         # テスト管理（サブタブ：一覧・実行・結果記録・エクスポート）
         self.test_tab = QTabWidget()
-        # --- 一覧タブ（プレースホルダー）---
+        # --- 一覧タブ（テスト管理ウィジェット配置）---
         test_list_tab = QWidget()
         vbox_test_list = QVBoxLayout(test_list_tab)
-        # 上部ボタンエリア
-        btn_area_test = QHBoxLayout()
-        btn_test_exec = QPushButton("実行")
-        btn_test_result = QPushButton("結果記録")
-        btn_test_export = QPushButton("Excelエクスポート")
-        btn_area_test.addWidget(btn_test_exec)
-        btn_area_test.addWidget(btn_test_result)
-        btn_area_test.addWidget(btn_test_export)
-        btn_area_test.addStretch()
-        vbox_test_list.addLayout(btn_area_test)
-        vbox_test_list.addWidget(QLabel("テスト一覧画面（今後拡張予定）"))
+
+        # テスト管理テーブルのみ配置
+        self.test_management_widget = TestManagementWidget()
+        vbox_test_list.addWidget(self.test_management_widget)
         self.test_tab.addTab(test_list_tab, "一覧")
 
         # --- 実行タブ ---
@@ -131,14 +125,6 @@ class MainWindow(QMainWindow):
         self.test_tab.addTab(test_export_tab, "エクスポート")
 
         self.stack.addWidget(self.test_tab)
-
-        # ボタンの画面遷移ロジック（例：実行ボタンで実行タブへ、結果記録ボタンで結果記録タブへ）
-        def goto_test_exec():
-            self.test_tab.setCurrentIndex(1)
-        def goto_test_result():
-            self.test_tab.setCurrentIndex(2)
-        btn_test_exec.clicked.connect(goto_test_exec)
-        btn_test_result.clicked.connect(goto_test_result)
 
         # 不具合管理（サブタブ：一覧・登録・編集・詳細・エクスポート）
         self.bug_tab = QTabWidget()
