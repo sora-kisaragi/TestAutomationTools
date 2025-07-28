@@ -69,9 +69,9 @@ class ScenarioListWidget(QWidget):
     
     def _init_table(self):
         """テーブルの初期化"""
-        self.table.setColumnCount(8)
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
-            "プロジェクト", "画面名", "テストケース", "テスト項目名", "優先度", "担当者", "結果", "操作"
+            "画面名", "テストケース", "テスト項目名", "優先度", "担当者", "結果", "操作"
         ])
         header = self.table.horizontalHeader()
         if header:
@@ -238,11 +238,10 @@ class ScenarioListWidget(QWidget):
         self.table.setRowCount(len(test_items))
         
         for row, item in enumerate(test_items):
-            # データ行のみにアイテムを設定
-            self.table.setItem(row, 0, QTableWidgetItem(item['project_name']))
-            self.table.setItem(row, 1, QTableWidgetItem(item['screen_name']))
-            self.table.setItem(row, 2, QTableWidgetItem(item['testcase_name']))
-            self.table.setItem(row, 3, QTableWidgetItem(item['testitem_name']))
+            # データ行のみにアイテムを設定（プロジェクト列は削除）
+            self.table.setItem(row, 0, QTableWidgetItem(item['screen_name']))
+            self.table.setItem(row, 1, QTableWidgetItem(item['testcase_name']))
+            self.table.setItem(row, 2, QTableWidgetItem(item['testitem_name']))
             
             # 優先度色分け
             priority_item = QTableWidgetItem(item['priority'])
@@ -252,9 +251,9 @@ class ScenarioListWidget(QWidget):
                 priority_item.setForeground(QColor('orange'))
             elif item['priority'] == '低':
                 priority_item.setForeground(QColor('blue'))
-            self.table.setItem(row, 4, priority_item)
+            self.table.setItem(row, 3, priority_item)
             
-            self.table.setItem(row, 5, QTableWidgetItem(item['tester']))
+            self.table.setItem(row, 4, QTableWidgetItem(item['tester']))
             
             # 実行結果色分け
             result_item = QTableWidgetItem(item['result'])
@@ -264,10 +263,10 @@ class ScenarioListWidget(QWidget):
                 result_item.setForeground(QColor('red'))
             elif item['result'] == '要確認':
                 result_item.setForeground(QColor('orange'))
-            self.table.setItem(row, 6, result_item)
+            self.table.setItem(row, 5, result_item)
             
             # 操作ボタンは未実装のため現在は表示しない
-            self.table.setItem(row, 7, QTableWidgetItem("-"))
+            self.table.setItem(row, 6, QTableWidgetItem("-"))
 
     def _get_project_name(self, project_id):
         if not hasattr(self, '_project_list'):
@@ -292,21 +291,38 @@ class ScenarioListWidget(QWidget):
     
     def _force_refresh(self):
         """強制的にプロジェクトとシナリオ一覧を再読み込み"""
+        current_index = self.project_combo.currentIndex()
         self._load_projects()
-        self._load_scenarios()
+        # 現在選択されているプロジェクトのデータのみ表示
+        if hasattr(self, '_project_list') and self._project_list and 0 <= current_index < len(self._project_list):
+            selected_project_id = self._project_list[current_index][0]
+            self._load_scenarios(project_id=selected_project_id)
+        else:
+            self._load_scenarios()
         print("Excelインポート後の一覧更新完了")
 
     def _on_refresh(self):
         """
         更新ボタン押下時の処理（プロジェクト・シナリオ一覧を再読み込み）
         """
+        current_index = self.project_combo.currentIndex()
         self._load_projects()
-        self._load_scenarios()
+        # 現在選択されているプロジェクトのデータのみ表示
+        if hasattr(self, '_project_list') and self._project_list and 0 <= current_index < len(self._project_list):
+            selected_project_id = self._project_list[current_index][0]
+            self._load_scenarios(project_id=selected_project_id)
+        else:
+            self._load_scenarios()
 
     def showEvent(self, event):
         super().showEvent(event)
         # 初回表示時のみデータを読み込む
         if not hasattr(self, '_initialized'):
             self._load_projects()
-            self._load_scenarios()
+            # 初期化時は選択されたプロジェクトのデータのみ表示
+            if hasattr(self, '_project_list') and self._project_list:
+                selected_project_id = self._project_list[0][0]  # 最初のプロジェクトのID
+                self._load_scenarios(project_id=selected_project_id)
+            else:
+                self._load_scenarios()
             self._initialized = True
