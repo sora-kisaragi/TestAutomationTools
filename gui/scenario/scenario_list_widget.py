@@ -46,8 +46,6 @@ class ScenarioListWidget(QWidget):
         proj_layout.addStretch()
         layout.addLayout(proj_layout)
 
-        # 上部の操作ボタンは一覧画面では不要になったため削除
-
         # 検索欄
         search_layout = QHBoxLayout()
         search_label = QLabel("検索キーワード:")
@@ -82,7 +80,7 @@ class ScenarioListWidget(QWidget):
             header.setVisible(True)
             # ソート機能を有効化
             header.setSortIndicatorShown(True)
-            header.sectionClicked.connect(self._on_header_clicked)
+            # ヘッダークリック時のカスタムソートは不要のためメソッド削除
         self.table.setSelectionBehavior(self.table.SelectRows)
         self.table.setEditTriggers(self.table.NoEditTriggers)
         # ソート機能を有効化
@@ -268,21 +266,7 @@ class ScenarioListWidget(QWidget):
                 result_item.setForeground(QColor('orange'))
             self.table.setItem(row, 6, result_item)
             
-            # 操作ボタン（未実装機能のため一時的にコメントアウト）
-            # TODO: 詳細・編集・実行機能の実装後に有効化
-            # op_widget = QWidget()
-            # op_layout = QHBoxLayout(op_widget)
-            # btn_detail = QPushButton("詳細")
-            # btn_edit = QPushButton("編集")
-            # btn_exec = QPushButton("実行")
-            # op_layout.addWidget(btn_detail)
-            # op_layout.addWidget(btn_edit)
-            # op_layout.addWidget(btn_exec)
-            # op_layout.setContentsMargins(0,0,0,0)
-            # op_layout.addStretch()
-            # self.table.setCellWidget(row, 7, op_widget)
-            
-            # 暫定的に操作列は空白を表示
+            # 操作ボタンは未実装のため現在は表示しない
             self.table.setItem(row, 7, QTableWidgetItem("-"))
 
     def _get_project_name(self, project_id):
@@ -318,12 +302,6 @@ class ScenarioListWidget(QWidget):
         """
         self._load_projects()
         self._load_scenarios()
-
-    def _on_header_clicked(self, logical_index):
-        """ヘッダークリック時の処理（ソート）"""
-        # PyQt5のQTableWidgetは自動的にソートを行うため、特別な処理は不要
-        # ただし、必要に応じてカスタムソート処理を追加可能
-        pass
 
     def showEvent(self, event):
         super().showEvent(event)

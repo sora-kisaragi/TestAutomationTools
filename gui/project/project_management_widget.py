@@ -107,5 +107,3 @@ class ProjectManagementWidget(QWidget):
             except Exception as e:
                 QMessageBox.critical(self, "予期しないエラー", f"削除処理中に予期しないエラーが発生しました:\n{str(e)}")
                 self._load_projects()
-
-    # _excel_import メソッドは不要になったため削除

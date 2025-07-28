@@ -309,11 +309,14 @@ def delete_project(project_id: int) -> None:
         cur.execute("DELETE FROM projects WHERE id=?", (project_id,))
         conn.commit()
 
-def delete_test_cases_safely(test_case_ids: list) -> dict:
+def delete_test_cases_safely(test_case_ids: List[int]) -> dict:
     """
     テストケースを安全に削除し、関連するバグ情報の整合性を保つ
     戻り値: {"deleted_test_cases": int, "updated_bugs": int}
     """
+    # validate
+    if not isinstance(test_case_ids, list) or not all(isinstance(i, int) for i in test_case_ids):
+        raise ValueError("test_case_ids は整数IDのリストである必要があります")
     if not test_case_ids:
         return {"deleted_test_cases": 0, "updated_bugs": 0}
     

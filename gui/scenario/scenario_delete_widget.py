@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 import sqlite3
 from core import scenario_db
+from typing import Optional, List
 
 class ScenarioDeleteWidget(QWidget):
     """既存シナリオを複数選択して削除するウィジェット"""
@@ -114,7 +115,7 @@ class ScenarioDeleteWidget(QWidget):
             if project_id:
                 sql += "AND s.project_id=? "
                 params.append(project_id)
-            # screen_idがNoneでない場合のみ条件追加（"(すべて)"が選択されている場合はNone）
+            # 選択画面IDがNoneでない場合のみ条件追加（"(すべて)"はNone）
             if screen_id is not None:
                 sql += "AND s.id=? "
                 params.append(screen_id)
@@ -183,8 +184,10 @@ class ScenarioDeleteWidget(QWidget):
                 break
         self.delete_btn.setEnabled(has_checked)
 
-    def _check_related_bugs(self, test_case_ids):
-        """指定されたテストケースに関連するバグ数を返す"""
+    def _check_related_bugs(self, test_case_ids: List[int]) -> int:
+        """指定したテストケースID群に関連付くバグ件数を返す"""
+        if not isinstance(test_case_ids, list) or not all(isinstance(i, int) for i in test_case_ids):
+            raise ValueError("test_case_ids は整数IDのリストである必要があります")
         with sqlite3.connect(scenario_db.DB_PATH) as conn:
             cur = conn.cursor()
             placeholders = ','.join('?' * len(test_case_ids))
@@ -223,8 +226,7 @@ class ScenarioDeleteWidget(QWidget):
         try:
             with sqlite3.connect(scenario_db.DB_PATH) as conn:
                 cur = conn.cursor()
-                # トランザクション開始
-                conn.execute("BEGIN TRANSACTION")
+                # sqlite3 のコンテキストマネージャ内では自動でトランザクション開始されるため明示的BEGINは不要
                 
                 for cid in cids:
                     # データ整合性を保つための適切な削除順序
