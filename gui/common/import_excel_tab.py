@@ -8,6 +8,7 @@ from PyQt5.QtGui import QColor
 from typing import Optional
 import os
 import sqlite3
+import logging
 
 from core import scenario_db
 from gui.scenario.scenario_creation_widget import ScenarioCreationWidget
@@ -82,19 +83,47 @@ class ImportExcelTab(QWidget):
             event.acceptProposedAction()
 
     def dropEvent(self, event):
-        for url in event.mimeData().urls():
-            path = url.toLocalFile()
-            if path.lower().endswith((".xlsx", ".xls")):
-                self.selected_file = path
-                self.file_edit.setText(os.path.basename(path))
-                break
+        try:
+            for url in event.mimeData().urls():
+                path = url.toLocalFile()
+                # パス検証
+                if not self._is_safe_file_path(path):
+                    QMessageBox.warning(self, "ファイルエラー", "不正なファイルパスです")
+                    continue
+                    
+                if path.lower().endswith((".xlsx", ".xls")):
+                    # ファイル存在確認
+                    if not os.path.exists(path) or not os.access(path, os.R_OK):
+                        QMessageBox.warning(self, "ファイルエラー", "ファイルが存在しないか読み取り権限がありません")
+                        continue
+                        
+                    self.selected_file = path
+                    self.file_edit.setText(os.path.basename(path))
+                    break
+        except Exception as e:
+            logging.exception("ドロップ処理エラー")
+            QMessageBox.critical(self, "エラー", f"ファイル処理中にエラーが発生しました: {str(e)}")
 
     # ------------------------------ Slots ------------------------------
     def _on_select_file(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Excelファイルを選択", "", "Excel Files (*.xlsx *.xls)")
-        if path:
-            self.selected_file = path
-            self.file_edit.setText(os.path.basename(path))
+        try:
+            path, _ = QFileDialog.getOpenFileName(self, "Excelファイルを選択", "", "Excel Files (*.xlsx *.xls)")
+            if path:
+                # パス検証
+                if not self._is_safe_file_path(path):
+                    QMessageBox.warning(self, "ファイルエラー", "不正なファイルパスです")
+                    return
+                    
+                # ファイル存在確認
+                if not os.path.exists(path) or not os.access(path, os.R_OK):
+                    QMessageBox.warning(self, "ファイルエラー", "ファイルが存在しないか読み取り権限がありません")
+                    return
+                    
+                self.selected_file = path
+                self.file_edit.setText(os.path.basename(path))
+        except Exception as e:
+            logging.exception("ファイル選択エラー")
+            QMessageBox.critical(self, "エラー", f"ファイル選択中にエラーが発生しました: {str(e)}")
 
     def _on_import_clicked(self):
         # 入力内容取得
@@ -148,6 +177,20 @@ class ImportExcelTab(QWidget):
             self.result_table.setItem(i, 3, status_item)
             self.result_table.setItem(i, 4, QTableWidgetItem(row.get("message", "-")))
 
+    def _is_safe_file_path(self, path: str) -> bool:
+        try:
+            normalized_path = os.path.normpath(os.path.abspath(path))
+            
+            if '..' in path or path.startswith('/') and not os.name == 'nt':
+                return False
+            
+            if not path.lower().endswith(('.xlsx', '.xls')):
+                return False
+                
+            return True
+        except Exception:
+            return False
+
     def _load_projects(self):
         """DB からプロジェクト一覧を取得し保持"""
         self._project_list = []
@@ -156,5 +199,5 @@ class ImportExcelTab(QWidget):
                 cur = conn.cursor()
                 cur.execute("SELECT id, name FROM projects ORDER BY id")
                 self._project_list = cur.fetchall()
-        except Exception:
-            pass 
+        except Exception as e:
+            logging.exception("プロジェクト一覧取得エラー") 

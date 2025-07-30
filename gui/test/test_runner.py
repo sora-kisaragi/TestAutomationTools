@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import sqlite3
+import logging
 from core import scenario_db
 
 
@@ -18,24 +19,69 @@ class TestRunnerThread(QThread):
 
     def run(self):
         script_path = os.path.join(self.base_dir, str(self.test_case_id), "run.py")
+        
+        # パス検証
+        if not self._is_safe_path(script_path):
+            msg = f"不正なパスが指定されました: {script_path}"
+            logging.warning(msg)
+            self._update_db(False)
+            self.finished_signal.emit(self.test_case_id, False, msg)
+            return
+            
         if not os.path.isfile(script_path):
             msg = f"スクリプトが見つかりません: {script_path}"
             self._update_db(False)
             self.finished_signal.emit(self.test_case_id, False, msg)
             return
 
-        # Run pytest as subprocess to easily capture output
-        cmd = [sys.executable, "-m", "pytest", script_path, "-q"]
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        out, _ = proc.communicate()
-        success = proc.returncode == 0
-        # update DB
-        self._update_db(success)
-        self.finished_signal.emit(self.test_case_id, success, out)
+        try:
+            cmd = [sys.executable, "-m", "pytest", script_path, "-q"]
+            proc = subprocess.Popen(
+                cmd, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.STDOUT, 
+                text=True,
+                shell=False,
+                timeout=300
+            )
+            out, _ = proc.communicate(timeout=300)
+            success = proc.returncode == 0
+            # update DB
+            self._update_db(success)
+            self.finished_signal.emit(self.test_case_id, success, out)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            msg = "テスト実行がタイムアウトしました"
+            logging.error(msg)
+            self._update_db(False)
+            self.finished_signal.emit(self.test_case_id, False, msg)
+        except Exception as e:
+            msg = f"テスト実行中にエラーが発生しました: {str(e)}"
+            logging.exception("テスト実行エラー")
+            self._update_db(False)
+            self.finished_signal.emit(self.test_case_id, False, msg)
+
+    def _is_safe_path(self, path: str) -> bool:
+        try:
+            normalized_path = os.path.normpath(os.path.abspath(path))
+            normalized_base = os.path.normpath(os.path.abspath(self.base_dir))
+            
+            if not normalized_path.startswith(normalized_base):
+                return False
+                
+            if not str(self.test_case_id).isdigit():
+                return False
+                
+            return True
+        except Exception:
+            return False
 
     def _update_db(self, success: bool):
         result_text = "成功" if success else "失敗"
-        with sqlite3.connect(scenario_db.DB_PATH) as conn:
-            cur = conn.cursor()
-            cur.execute("UPDATE test_items SET result=? WHERE test_case_id=?", (result_text, self.test_case_id))
-            conn.commit() 
+        try:
+            with sqlite3.connect(scenario_db.DB_PATH) as conn:
+                cur = conn.cursor()
+                cur.execute("UPDATE test_items SET result=? WHERE test_case_id=?", (result_text, self.test_case_id))
+                conn.commit()
+        except Exception as e:
+            logging.exception("データベース更新エラー") 

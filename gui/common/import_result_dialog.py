@@ -3,7 +3,10 @@ Excelインポート結果ダイアログ
 """
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if __name__ == '__main__':
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
 
 from PyQt5.QtWidgets import QDialog, QHBoxLayout, QSplitter, QWidget, QVBoxLayout, QListWidget, QScrollArea, QLabel
 from PyQt5.QtCore import Qt

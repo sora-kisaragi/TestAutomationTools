@@ -5,6 +5,18 @@ import sqlite3
 from typing import Optional, Dict, Any, List, Tuple
 import os
 import datetime
+import logging
+
+# ----------------------------------------------------------------------------
+# ロギング設定（モジュール読み込み時に一度だけ）
+# ----------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] %(levelname)s %(name)s: %(message)s",
+)
+
+# マスター系テーブル名のホワイトリスト
+ALLOWED_MASTER_TABLES = set(INITIAL_MASTER_DATA.keys())
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'scenarios.db')
 
@@ -176,33 +188,41 @@ def init_db():
     """
     DBファイルとテーブルを初期化
     """
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
-        # 新スキーマ
-        conn.execute(CREATE_PROJECTS_TABLE)
-        conn.execute(CREATE_SCENARIOS_TABLE)
-        conn.execute(CREATE_SCREENS_TABLE)
-        conn.execute(CREATE_TEST_CASES_TABLE)
-        conn.execute(CREATE_TEST_ITEMS_TABLE)
-        conn.execute(CREATE_BUGS_TABLE)
-        
-        # マスターテーブルを作成
-        for table_sql in CREATE_MASTER_TABLES:
-            conn.execute(table_sql)
-        
-        # 初期マスターデータを投入
-        for table_name, values in INITIAL_MASTER_DATA.items():
-            for value in values:
-                try:
-                    conn.execute(f"INSERT INTO {table_name} (name) VALUES (?)", (value,))
-                except sqlite3.IntegrityError:
-                    # 既に存在する場合はスキップ
-                    pass
-        
-        # マイグレーション: test_casesテーブルにカラムを追加
-        _migrate_test_cases_table(conn)
-        
-        conn.commit()
+    try:
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        with sqlite3.connect(DB_PATH) as conn:
+            # 新スキーマ
+            conn.execute(CREATE_PROJECTS_TABLE)
+            conn.execute(CREATE_SCENARIOS_TABLE)
+            conn.execute(CREATE_SCREENS_TABLE)
+            conn.execute(CREATE_TEST_CASES_TABLE)
+            conn.execute(CREATE_TEST_ITEMS_TABLE)
+            conn.execute(CREATE_BUGS_TABLE)
+            
+            # マスターテーブルを作成
+            for table_sql in CREATE_MASTER_TABLES:
+                conn.execute(table_sql)
+            
+            # 初期マスターデータを投入
+            for table_name, values in INITIAL_MASTER_DATA.items():
+                for value in values:
+                    try:
+                        conn.execute(f"INSERT INTO {table_name} (name) VALUES (?)", (value,))
+                    except sqlite3.IntegrityError:
+                        # 既に存在する場合はスキップ
+                        pass
+            
+            # マイグレーション: test_casesテーブルにカラムを追加
+            _migrate_test_cases_table(conn)
+            
+            # インデックスの作成
+            _create_indexes(conn)
+            
+            conn.commit()
+            logging.info("データベース初期化完了")
+    except Exception as e:
+        logging.exception("データベース初期化エラー")
+        raise
 
 def _migrate_test_cases_table(conn):
     """
@@ -223,9 +243,35 @@ def _migrate_test_cases_table(conn):
         if 'result' not in columns:
             conn.execute("ALTER TABLE test_cases ADD COLUMN result TEXT")
             
-        print("test_casesテーブルのマイグレーション完了")
+        logging.info("test_casesテーブルのマイグレーション完了")
     except Exception as e:
-        print(f"マイグレーションエラー: {e}")
+        logging.exception("マイグレーションエラー")
+        raise
+
+def _create_indexes(conn):
+    """
+    パフォーマンス向上のためのインデックスを作成
+    """
+    try:
+        cur = conn.cursor()
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_screens_project_id ON screens(project_id)",
+            "CREATE INDEX IF NOT EXISTS idx_test_cases_screen_id ON test_cases(screen_id)",
+            "CREATE INDEX IF NOT EXISTS idx_test_items_test_case_id ON test_items(test_case_id)",
+            "CREATE INDEX IF NOT EXISTS idx_test_items_bug_id ON test_items(bug_id)",
+            "CREATE INDEX IF NOT EXISTS idx_bugs_project_id ON bugs(project_id)",
+            "CREATE INDEX IF NOT EXISTS idx_bugs_test_item_id ON bugs(test_item_id)",
+            "CREATE INDEX IF NOT EXISTS idx_scenarios_project_id ON scenarios(project_id)",
+        ]
+        
+        for index_sql in indexes:
+            cur.execute(index_sql)
+            
+        logging.info("データベースインデックス作成完了")
+    except Exception as e:
+        logging.exception("インデックス作成エラー")
+        # インデックス作成エラーは警告レベルとして続行
+        logging.warning("インデックス作成に失敗しましたが、処理を続行します")
 
 def get_next_bug_no(project_id: int) -> int:
     """
@@ -238,14 +284,23 @@ def get_next_bug_no(project_id: int) -> int:
         return (row[0] or 0) + 1
 
 def get_master_data(table_name: str) -> list:
+    """指定したマスターテーブルから name 一覧を取得
+
+    テーブル名はホワイトリストで検証し、SQL インジェクションを防止する。
+    エラー時にはスタックトレース付きでログ出力し、呼び出し元へ例外を伝播させる。
     """
-    指定したマスターテーブルからname一覧を取得
-    """
-    with sqlite3.connect(DB_PATH) as conn:
-        cur = conn.cursor()
-        cur.execute(f"SELECT name FROM {table_name} ORDER BY id")
-        rows = cur.fetchall()
-        return [row[0] for row in rows]
+    if table_name not in ALLOWED_MASTER_TABLES:
+        raise ValueError(f"不正なテーブル名が指定されました: {table_name}")
+
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cur = conn.cursor()
+            cur.execute(f"SELECT name FROM {table_name} ORDER BY id")
+            rows = cur.fetchall()
+            return [row[0] for row in rows]
+    except Exception as e:
+        logging.exception("get_master_data でエラーが発生しました")
+        raise
 
 def get_all_scenarios() -> list:
     """
